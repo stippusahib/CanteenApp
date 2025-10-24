@@ -1,21 +1,23 @@
 package com.canteen.model;
 
 public class OrderItem {
-    private String name;
-    private double price;
+    private MenuItem item;
     private int quantity;
 
-    public OrderItem(String name, double price, int quantity) {
-        this.name = name;
-        this.price = price;
+    public OrderItem(MenuItem item, int quantity) {
+        this.item = item;
         this.quantity = quantity;
     }
 
-    public double getTotal() {
-        return price * quantity;
+    public MenuItem getItem() {
+        return item;
     }
 
-    public String getName() { return name; }
-    public double getPrice() { return price; }
-    public int getQuantity() { return quantity; }
+    public int getQuantity() {
+        return quantity;
+    }
+
+    public double getTotalPrice() {
+        return item.getPrice() * quantity;
+    }
 }
