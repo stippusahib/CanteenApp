@@ -1,34 +1,30 @@
 package com.canteen.db;
 
-import com.canteen.model.Student;
 import com.canteen.model.Admin;
 import com.canteen.model.MenuItem;
 import com.canteen.model.Order;
+import com.canteen.model.OrderItem;
+import com.canteen.model.Student;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
 
 public class DatabaseManager {
     
-    // Connection details for canteen_db
     private static final String DB_URL = "jdbc:mysql://localhost:3306/canteen_db";
     private static final String USER = "root";
     private static final String PASS = "";
 
-    /**
-     * Loads the JDBC driver and establishes a connection to the database.
-     */
     private Connection getConnection() throws SQLException {
         try {
-            // Explicitly load the driver
             Class.forName("com.mysql.cj.jdbc.Driver");
         } catch (ClassNotFoundException e) {
-            // Handle driver not found exception
             System.err.println("MySQL JDBC Driver not found.");
             e.printStackTrace();
             throw new SQLException("JDBC Driver not found", e);
@@ -36,41 +32,27 @@ public class DatabaseManager {
         return DriverManager.getConnection(DB_URL, USER, PASS);
     }
 
-    /**
-     * Validates student login credentials.
-     * Returns a Student object on success, null on failure.
-     */
     public Student validateStudentLogin(String email, String password) {
         String sql = "SELECT * FROM students WHERE email = ? AND password = ?";
-        
-        // try-with-resources ensures Connection and PreparedStatement are auto-closed
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
-
+            
             pstmt.setString(1, email);
             pstmt.setString(2, password);
 
-            // try-with-resources for the ResultSet
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    // Login successful, return new Student object
                     return new Student(rs.getInt("student_id"), rs.getString("email"));
                 }
             }
         } catch (SQLException e) {
-            // Log the database error
             e.printStackTrace();
         }
-        return null; // Login failed
+        return null;
     }
 
-    /**
-     * Validates admin login credentials.
-     * Returns an Admin object on success, null on failure.
-     */
     public Admin validateAdminLogin(String email, String password) {
         String sql = "SELECT * FROM admins WHERE email = ? AND password = ?";
-        
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
@@ -79,88 +61,118 @@ public class DatabaseManager {
 
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    // Admin login successful
                     return new Admin(rs.getInt("admin_id"), rs.getString("email"));
                 }
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return null; // Admin login failed
+        return null;
     }
 
-    /**
-     * Creates a new student account.
-     * Returns true on success, false on failure (e.g., duplicate email).
-     */
     public boolean createStudent(String email, String password) {
         String sql = "INSERT INTO students (email, password) VALUES (?, ?)";
-        
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql)) {
 
             pstmt.setString(1, email);
             pstmt.setString(2, password);
-            
             int rowsAffected = pstmt.executeUpdate();
-            
-            // executeUpdate() returns the number of rows affected. 
-            // If it's > 0, the insert was successful.
             return rowsAffected > 0;
-
         } catch (SQLException e) {
-            // This will catch errors, including UNIQUE constraint violations (duplicate email)
             e.printStackTrace();
             return false;
         }
     }
 
-    /**
-     * Retrieves all menu items from the database.
-     * Returns a List of MenuItem objects.
-     */
     public List<MenuItem> getMenuItems() {
         List<MenuItem> menu = new ArrayList<>();
         String sql = "SELECT * FROM menu_items";
-
         try (Connection conn = getConnection();
              PreparedStatement pstmt = conn.prepareStatement(sql);
              ResultSet rs = pstmt.executeQuery()) {
 
-            // Loop through all rows in the result set
             while (rs.next()) {
-                int id = rs.getInt("item_id");
-                String name = rs.getString("name");
-                double price = rs.getDouble("price");
-                
-                // Add new MenuItem to the list
-                menu.add(new MenuItem(id, name, price));
+                menu.add(new MenuItem(
+                    rs.getInt("item_id"), 
+                    rs.getString("name"), 
+                    rs.getDouble("price")
+                ));
             }
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return menu; // Returns the list (will be empty if an error occurred)
+        return menu;
     }
 
-    /**
-     * Saves a new order to the database.
-     * Assumes Order object has a getSubtotal() method.
-     */
     public boolean saveOrder(Order order, int studentId) {
-        String sql = "INSERT INTO orders (student_id, total_amount) VALUES (?, ?)";
+        
+        String sqlOrder = "INSERT INTO orders (student_id, total_amount) VALUES (?, ?)";
+        String sqlDetails = "INSERT INTO order_details (order_id, item_id, quantity, item_price) VALUES (?, ?, ?, ?)";
+        
+        Connection conn = null;
+        PreparedStatement pstmtOrder = null;
+        PreparedStatement pstmtDetails = null;
+        ResultSet generatedKeys = null;
 
-        try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+        try {
+            conn = getConnection();
+            conn.setAutoCommit(false); 
 
-            pstmt.setInt(1, studentId);
-            pstmt.setDouble(2, order.getSubtotal()); // Getting total from the Order object
+            pstmtOrder = conn.prepareStatement(sqlOrder, Statement.RETURN_GENERATED_KEYS);
+            pstmtOrder.setInt(1, studentId);
+            pstmtOrder.setDouble(2, order.getTotalAmount());
             
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
+            int rowsAffected = pstmtOrder.executeUpdate();
+            if (rowsAffected == 0) {
+                throw new SQLException("Creating order failed, no rows affected.");
+            }
+
+            int newOrderId = -1;
+            generatedKeys = pstmtOrder.getGeneratedKeys();
+            if (generatedKeys.next()) {
+                newOrderId = generatedKeys.getInt(1);
+            } else {
+                throw new SQLException("Creating order failed, no ID obtained.");
+            }
+            
+            pstmtDetails = conn.prepareStatement(sqlDetails);
+            
+            for (OrderItem item : order.getItems()) {
+                pstmtDetails.setInt(1, newOrderId);
+                pstmtDetails.setInt(2, item.getItemId());
+                pstmtDetails.setInt(3, item.getQuantity());
+                pstmtDetails.setDouble(4, item.getPriceAtPurchase());
+                pstmtDetails.addBatch();
+            }
+            
+            pstmtDetails.executeBatch();
+
+            conn.commit();
+            return true;
 
         } catch (SQLException e) {
             e.printStackTrace();
+            if (conn != null) {
+                try {
+                    conn.rollback();
+                } catch (SQLException ex) {
+                    ex.printStackTrace();
+                }
+            }
             return false;
+        } finally {
+            try {
+                if (generatedKeys != null) generatedKeys.close();
+                if (pstmtOrder != null) pstmtOrder.close();
+                if (pstmtDetails != null) pstmtDetails.close();
+                if (conn != null) {
+                    conn.setAutoCommit(true);
+                    conn.close();
+                }
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
         }
     }
 }
