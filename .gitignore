@@ -1,1 +1,25 @@
+# Compiled Java class files
+*.class
 
+# Build output folders
+bin/
+build/
+out/
+
+# IDE files (for VSCode, NetBeans, Eclipse)
+.vscode/
+.idea/
+.nbproject/
+*.iml
+
+# OS files (Windows, macOS)
+Thumbs.db
+.DS_Store
+
+# Log files
+*.log
+
+# XAMPP/MySQL database files
+# These should not be committed
+*.sql
+*.bak
