@@ -20,7 +20,7 @@ import java.util.List;
 
 public class DatabaseManager {
 
-    // Using your 'canteen' database
+    
     private static final String DB_URL = "jdbc:mysql://localhost:3306/canteen";
     private static final String USER = "root";
     private static final String PASS = "";
@@ -30,7 +30,7 @@ public class DatabaseManager {
         return DriverManager.getConnection(DB_URL, USER, PASS);
     }
 
-    // --- Student & Login Methods ---
+    
 
     public Student validateStudentLogin(String email, String password) {
         String sql = "SELECT * FROM students WHERE email = ? AND password = ?";
@@ -79,9 +79,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * UPDATED: Gets only AVAILABLE menu items (for student view).
-     */
+    
     public List<MenuItem> getMenuItems() {
         List<MenuItem> menu = new ArrayList<>();
         String sql = "SELECT * FROM menu_items WHERE is_available = TRUE";
@@ -93,7 +91,7 @@ public class DatabaseManager {
                     rs.getInt("item_id"),
                     rs.getString("name"),
                     rs.getDouble("price"),
-                    rs.getBoolean("is_available") // Now included
+                    rs.getBoolean("is_available") 
                 ));
             }
         } catch (SQLException | ClassNotFoundException e) {
@@ -102,10 +100,7 @@ public class DatabaseManager {
         return menu;
     }
 
-    /**
-     * Saves an order and returns the new Order ID.
-     * Returns -1 if the order fails.
-     */
+    
     public int saveOrder(Order order, int studentId) {
         String sqlInsertOrder = "INSERT INTO orders (student_id, total_amount) VALUES (?, ?)";
         String sqlInsertDetails = "INSERT INTO order_details (order_id, item_id, quantity, item_price) VALUES (?, ?, ?, ?)";
@@ -147,11 +142,7 @@ public class DatabaseManager {
         }
     }
 
-    // --- ADMIN METHODS ---
-
-    /**
-     * Updates an order's status to completed.
-     */
+    
     public boolean completeOrder(int orderId) {
         String sql = "UPDATE orders SET is_completed = TRUE WHERE order_id = ?";
         try (Connection conn = getConnection();
@@ -165,9 +156,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Gets all orders for the admin view.
-     */
+    
     public List<AdminOrderView> getAllOrders() {
         List<AdminOrderView> allOrders = new ArrayList<>();
         String sql = "SELECT o.order_id, s.email, o.total_amount, o.order_date, o.is_completed, " +
@@ -193,9 +182,7 @@ public class DatabaseManager {
         return allOrders;
     }
     
-    /**
-     * NEW: Gets ALL menu items, including unavailable ones (for admin view).
-     */
+    
     public List<MenuItem> getAllMenuItems() {
         List<MenuItem> menu = new ArrayList<>();
         String sql = "SELECT * FROM menu_items ORDER BY item_id";
@@ -216,9 +203,7 @@ public class DatabaseManager {
         return menu;
     }
 
-    /**
-     * NEW: Toggles the availability status of a menu item.
-     */
+    
     public boolean toggleItemAvailability(int itemId, boolean makeAvailable) {
         String sql = "UPDATE menu_items SET is_available = ? WHERE item_id = ?";
         try (Connection conn = getConnection();
@@ -233,9 +218,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Adds a new item to the menu_items table.
-     */
+   
     public boolean addMenuItem(String name, double price) {
         String sql = "INSERT INTO menu_items (name, price) VALUES (?, ?)";
         try (Connection conn = getConnection();
@@ -250,9 +233,6 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * NEW: Helper method to check if an item exists in ANY order_details row.
-     */
     private boolean isItemInAnyOrder(int itemId) throws SQLException, ClassNotFoundException {
         String sql = "SELECT COUNT(*) FROM order_details WHERE item_id = ?";
         try (Connection conn = getConnection();
@@ -260,23 +240,18 @@ public class DatabaseManager {
             pstmt.setInt(1, itemId);
             try (ResultSet rs = pstmt.executeQuery()) {
                 if (rs.next()) {
-                    return rs.getInt(1) > 0; // True if count > 0
+                    return rs.getInt(1) > 0; 
                 }
             }
         }
         return false;
     }
 
-    /**
-     * UPDATED: Soft Deletes a menu item ONLY if it has never been ordered.
-     * Returns 1: Success
-     * Returns -3: Failed (item has been ordered before)
-     * Returns 0: Failed (other SQL error or item not found)
-     */
+   
     public int deleteMenuItem(int itemId) {
         try {
             if (isItemInAnyOrder(itemId)) {
-                return -3; // Error code: Cannot delete, item has order history
+                return -3; 
             }
             String sql = "DELETE FROM menu_items WHERE item_id = ?";
             try (Connection conn = getConnection();
@@ -287,13 +262,10 @@ public class DatabaseManager {
             }
         } catch (SQLException | ClassNotFoundException e) {
             e.printStackTrace();
-            return 0; // Error during the check or delete
+            return 0; 
         }
     }
 
-    /**
-     * Gets a simplified list of all orders for transaction history.
-     */
     public List<TransactionHistoryView> getTransactionHistory() {
         List<TransactionHistoryView> transactions = new ArrayList<>();
         String sql = "SELECT o.order_id, s.email, o.total_amount, o.order_date " +
