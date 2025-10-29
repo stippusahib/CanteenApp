@@ -20,7 +20,6 @@ import java.util.List;
 
 public class DatabaseManager {
 
-    
     private static final String DB_URL = "jdbc:mysql://localhost:3306/canteen";
     private static final String USER = "root";
     private static final String PASS = "";
@@ -29,8 +28,6 @@ public class DatabaseManager {
         Class.forName("com.mysql.cj.jdbc.Driver");
         return DriverManager.getConnection(DB_URL, USER, PASS);
     }
-
-    
 
     public Student validateStudentLogin(String email, String password) {
         String sql = "SELECT * FROM students WHERE email = ? AND password = ?";
@@ -79,19 +76,16 @@ public class DatabaseManager {
         }
     }
 
-    
     public List<MenuItem> getMenuItems() {
         List<MenuItem> menu = new ArrayList<>();
-        String sql = "SELECT * FROM menu_items WHERE is_available = TRUE";
+        String sql = "SELECT * FROM menu_items WHERE is_available = TRUE ORDER BY item_id";
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql);
              ResultSet rs = stmt.executeQuery()) {
             while (rs.next()) {
                 menu.add(new MenuItem(
-                    rs.getInt("item_id"),
-                    rs.getString("name"),
-                    rs.getDouble("price"),
-                    rs.getBoolean("is_available") 
+                    rs.getInt("item_id"), rs.getString("name"),
+                    rs.getDouble("price"), rs.getBoolean("is_available")
                 ));
             }
         } catch (SQLException | ClassNotFoundException e) {
@@ -100,7 +94,6 @@ public class DatabaseManager {
         return menu;
     }
 
-    
     public int saveOrder(Order order, int studentId) {
         String sqlInsertOrder = "INSERT INTO orders (student_id, total_amount) VALUES (?, ?)";
         String sqlInsertDetails = "INSERT INTO order_details (order_id, item_id, quantity, item_price) VALUES (?, ?, ?, ?)";
@@ -108,10 +101,10 @@ public class DatabaseManager {
         int newOrderId = -1;
         try {
             conn = getConnection();
-            conn.setAutoCommit(false); 
+            conn.setAutoCommit(false);
             try (PreparedStatement pstmtOrder = conn.prepareStatement(sqlInsertOrder, Statement.RETURN_GENERATED_KEYS)) {
                 pstmtOrder.setInt(1, studentId);
-                pstmtOrder.setDouble(2, order.getTotalAmount()); 
+                pstmtOrder.setDouble(2, order.getTotalAmount());
                 pstmtOrder.executeUpdate();
                 try (ResultSet generatedKeys = pstmtOrder.getGeneratedKeys()) {
                     if (generatedKeys.next()) {
@@ -142,7 +135,6 @@ public class DatabaseManager {
         }
     }
 
-    
     public boolean completeOrder(int orderId) {
         String sql = "UPDATE orders SET is_completed = TRUE WHERE order_id = ?";
         try (Connection conn = getConnection();
@@ -156,15 +148,14 @@ public class DatabaseManager {
         }
     }
 
-    
     public List<AdminOrderView> getAllOrders() {
         List<AdminOrderView> allOrders = new ArrayList<>();
         String sql = "SELECT o.order_id, s.email, o.total_amount, o.order_date, o.is_completed, " +
-                     "GROUP_CONCAT(CONCAT(od.quantity, 'x ', mi.name) SEPARATOR ', ') AS items_summary " +
+                     "IFNULL(GROUP_CONCAT(CONCAT(od.quantity, 'x ', mi.name) SEPARATOR ', '), 'Items no longer available') AS items_summary " +
                      "FROM orders o " +
                      "JOIN students s ON o.student_id = s.student_id " +
-                     "JOIN order_details od ON o.order_id = od.order_id " +
-                     "JOIN menu_items mi ON od.item_id = mi.item_id " +
+                     "LEFT JOIN order_details od ON o.order_id = od.order_id " +
+                     "LEFT JOIN menu_items mi ON od.item_id = mi.item_id " +
                      "GROUP BY o.order_id, s.email, o.total_amount, o.order_date, o.is_completed " +
                      "ORDER BY o.order_date DESC";
         try (Connection conn = getConnection();
@@ -180,90 +171,6 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return allOrders;
-    }
-    
-    
-    public List<MenuItem> getAllMenuItems() {
-        List<MenuItem> menu = new ArrayList<>();
-        String sql = "SELECT * FROM menu_items ORDER BY item_id";
-        try (Connection conn = getConnection();
-             PreparedStatement stmt = conn.prepareStatement(sql);
-             ResultSet rs = stmt.executeQuery()) {
-            while (rs.next()) {
-                menu.add(new MenuItem(
-                    rs.getInt("item_id"),
-                    rs.getString("name"),
-                    rs.getDouble("price"),
-                    rs.getBoolean("is_available")
-                ));
-            }
-        } catch (SQLException | ClassNotFoundException e) {
-            e.printStackTrace();
-        }
-        return menu;
-    }
-
-    
-    public boolean toggleItemAvailability(int itemId, boolean makeAvailable) {
-        String sql = "UPDATE menu_items SET is_available = ? WHERE item_id = ?";
-        try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setBoolean(1, makeAvailable);
-            pstmt.setInt(2, itemId);
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
-        } catch (SQLException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-   
-    public boolean addMenuItem(String name, double price) {
-        String sql = "INSERT INTO menu_items (name, price) VALUES (?, ?)";
-        try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setString(1, name);
-            pstmt.setDouble(2, price);
-            int rowsAffected = pstmt.executeUpdate();
-            return rowsAffected > 0;
-        } catch (SQLException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return false;
-        }
-    }
-
-    private boolean isItemInAnyOrder(int itemId) throws SQLException, ClassNotFoundException {
-        String sql = "SELECT COUNT(*) FROM order_details WHERE item_id = ?";
-        try (Connection conn = getConnection();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            pstmt.setInt(1, itemId);
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return rs.getInt(1) > 0; 
-                }
-            }
-        }
-        return false;
-    }
-
-   
-    public int deleteMenuItem(int itemId) {
-        try {
-            if (isItemInAnyOrder(itemId)) {
-                return -3; 
-            }
-            String sql = "DELETE FROM menu_items WHERE item_id = ?";
-            try (Connection conn = getConnection();
-                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
-                pstmt.setInt(1, itemId);
-                int rowsAffected = pstmt.executeUpdate();
-                return (rowsAffected > 0) ? 1 : 0;
-            }
-        } catch (SQLException | ClassNotFoundException e) {
-            e.printStackTrace();
-            return 0; 
-        }
     }
 
     public List<TransactionHistoryView> getTransactionHistory() {
@@ -285,5 +192,83 @@ public class DatabaseManager {
             e.printStackTrace();
         }
         return transactions;
+    }
+
+    public List<MenuItem> getAllMenuItems() {
+        List<MenuItem> menu = new ArrayList<>();
+        String sql = "SELECT * FROM menu_items ORDER BY item_id";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                menu.add(new MenuItem(
+                    rs.getInt("item_id"), rs.getString("name"),
+                    rs.getDouble("price"), rs.getBoolean("is_available")
+                ));
+            }
+        } catch (SQLException | ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+        return menu;
+    }
+
+    public boolean toggleItemAvailability(int itemId, boolean makeAvailable) {
+        String sql = "UPDATE menu_items SET is_available = ? WHERE item_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setBoolean(1, makeAvailable);
+            pstmt.setInt(2, itemId);
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException | ClassNotFoundException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    public boolean addMenuItem(String name, double price) {
+        String sql = "INSERT INTO menu_items (name, price, is_available) VALUES (?, ?, TRUE)";
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, name);
+            pstmt.setDouble(2, price);
+            int rowsAffected = pstmt.executeUpdate();
+            return rowsAffected > 0;
+        } catch (SQLException | ClassNotFoundException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    private boolean isItemInAnyOrder(int itemId) throws SQLException, ClassNotFoundException {
+        String sql = "SELECT COUNT(*) FROM order_details WHERE item_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setInt(1, itemId);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt(1) > 0;
+                }
+            }
+        }
+        return false;
+    }
+
+    public int deleteMenuItem(int itemId) {
+        try {
+            if (isItemInAnyOrder(itemId)) {
+                return -3;
+            }
+            String sql = "DELETE FROM menu_items WHERE item_id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                pstmt.setInt(1, itemId);
+                int rowsAffected = pstmt.executeUpdate();
+                return (rowsAffected > 0) ? 1 : 0;
+            }
+        } catch (SQLException | ClassNotFoundException e) {
+            e.printStackTrace();
+            return 0;
+        }
     }
 }
