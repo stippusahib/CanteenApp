@@ -150,10 +150,9 @@ classDiagram
     DatabaseManager ..> Student : returns
     DatabaseManager ..> Admin : returns
     DatabaseManager ..> MenuItem : returns
-    DatabaseManager ..> Order : accepts
+    CanteenController "1" -- "1" Order : creates
+    CanteenController "1" -- "1" Bill : creates
 
     Order "1" o-- "*" OrderItem : contains
     OrderItem "1" -- "1" MenuItem : references
     Bill "1" -- "1" Order : calculates for
-    CanteenController "1" -- "1" Order : creates
-    CanteenController "1" -- "1" Bill : creates
